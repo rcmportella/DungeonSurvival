@@ -4,7 +4,7 @@ A text-based roguelike dungeon crawler using the OGL D20 game system.
 
 ## Overview
 
-DungeonSurvival is a roguelike game where you control a party of adventurers exploring procedurally generated dungeons. The game features turn-based combat, character progression, and treasure hunting.
+DungeonSurvival is a roguelike game where you control a party of adventurers exploring procedurally generated dungeons or predefined maps read through a JSON file. The game features turn-based combat, character progression, and treasure hunting.
 
 ## Game Features
 
