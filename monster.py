@@ -11,8 +11,11 @@ class Monster:
     
     def __init__(self, name, hit_dice="1d8", armor_class=10, 
                  attack_bonus=0, damage="1d6", 
-                 special_abilities=None, treasure=None):
+                 special_abilities=None, treasure=None,
+                 dexterity=10, initiative_bonus=0):
         self.name = name
+        self.dexterity = dexterity
+        self.initiative_bonus = initiative_bonus  # e.g. Improved Initiative
         self.hit_dice = hit_dice
         self.armor_class = armor_class
         self.attack_bonus = attack_bonus
@@ -29,6 +32,18 @@ class Monster:
         self.reflex_save = 0
         self.will_save = 0
         
+    def get_ability_modifier(self, ability):
+        """Get the modifier for an ability score"""
+        return dice.modifier(getattr(self, ability.lower()))
+
+    def get_initiative_modifier(self):
+        """D20 initiative modifier: Dexterity modifier plus misc bonuses"""
+        return self.get_ability_modifier('dexterity') + self.initiative_bonus
+
+    def roll_initiative(self):
+        """Roll initiative: d20 + initiative modifier"""
+        return dice.d20(1, self.get_initiative_modifier())
+
     def _roll_hit_points(self):
         """Roll hit points based on hit dice"""
         if 'd' in self.hit_dice:
@@ -119,6 +134,7 @@ class Goblin(Monster):
     """Weak humanoid enemy"""
     def __init__(self):
         super().__init__(
+            dexterity=14,
             name="Goblin",
             hit_dice="2d6",
             armor_class=12,
@@ -133,6 +149,7 @@ class Orc(Monster):
     """Medium humanoid warrior"""
     def __init__(self):
         super().__init__(
+            dexterity=10,
             name="Orc",
             hit_dice="2d8",
             armor_class=13,
@@ -147,6 +164,7 @@ class Skeleton(Monster):
     """Undead warrior"""
     def __init__(self):
         super().__init__(
+            dexterity=14,
             name="Skeleton",
             hit_dice="1d12",
             armor_class=13,
@@ -162,6 +180,7 @@ class Ogre(Monster):
     """Large giant enemy"""
     def __init__(self):
         super().__init__(
+            dexterity=8,
             name="Ogre",
             hit_dice="4d8+8",
             armor_class=16,
@@ -176,6 +195,7 @@ class Dragon(Monster):
     """Powerful dragon boss"""
     def __init__(self):
         super().__init__(
+            dexterity=10,
             name="Young Red Dragon",
             hit_dice="13d12+39",
             armor_class=21,
@@ -207,6 +227,7 @@ class GiantSpider(Monster):
     """Venomous spider"""
     def __init__(self):
         super().__init__(
+            dexterity=17,
             name="Giant Spider",
             hit_dice="2d8",
             armor_class=14,
@@ -222,6 +243,7 @@ class Zombie(Monster):
     """Slow undead creature"""
     def __init__(self):
         super().__init__(
+            dexterity=8,
             name="Zombie",
             hit_dice="2d12+3",
             armor_class=11,
@@ -238,6 +260,7 @@ class Troll(Monster):
     """Regenerating monster"""
     def __init__(self):
         super().__init__(
+            dexterity=14,
             name="Troll",
             hit_dice="6d8+36",
             armor_class=16,

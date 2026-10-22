@@ -35,21 +35,16 @@ class Combat:
         Returns:
             Ordered list of (name, initiative, is_player) tuples
         """
-        initiatives = []
-        
-        # Player initiative
-        dex_mod = self.character.get_ability_modifier('dexterity')
-        player_init = dice.d20(1, dex_mod)
-        initiatives.append((self.character.name, player_init, True))
-        
-        # Monster initiatives
+        entries = [(self.character.name, self.character.roll_initiative(),
+                    self.character.get_initiative_modifier(), True)]
         for monster in self.monsters:
-            monster_init = dice.d20()
-            initiatives.append((monster.name, monster_init, False))
-            
-        # Sort by initiative (highest first)
-        initiatives.sort(key=lambda x: x[1], reverse=True)
-        return initiatives
+            entries.append((monster.name, monster.roll_initiative(),
+                            monster.get_initiative_modifier(), False))
+
+        # D20 rules: highest total acts first; ties go to the higher modifier,
+        # then a coin flip
+        entries.sort(key=lambda e: (e[1], e[2], dice.roll(20)), reverse=True)
+        return [(name, init, is_player) for name, init, _, is_player in entries]
         
     def execute_round(self, player_action=None, target_index=0):
         """

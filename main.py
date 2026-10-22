@@ -34,10 +34,6 @@ def render_game(game_state):
     columns, rows = shutil.get_terminal_size(fallback=(80, 24))
     width = min(columns, 120)  # Cap at 120 for readability
     
-    # Debug output
-    raw_print(f"DEBUG: Terminal columns={columns}, rows={rows}, width={width}")
-    raw_print(f"DEBUG: Equals line length={len('=' * width)}")
-    
     display = game_state.get_display()
     
     # Title
@@ -46,12 +42,18 @@ def render_game(game_state):
     raw_print("=" * width)
     raw_print()
     
-    # Map or combat view
-    if display['map']:
-        for line in display['map'].split('\n'):
-            raw_print(line)
-        raw_print()
-    
+    # Controls hint
+    raw_print("-" * width)
+    if display['mode'] == GameMode.EXPLORATION:
+        # Check if there's a pending door action
+        if hasattr(game_state, 'pending_door_action') and game_state.pending_door_action:
+            raw_print("Door Controls: L: lockpick | S: smash | Move away to cancel")
+        else:
+            raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | C: character")
+    elif display['mode'] == GameMode.COMBAT:
+        raw_print("Combat: A: attack | S: spell | I: item | F: flee | Q: quit")
+    raw_print()
+
     # Party info
     raw_print("-" * width)
     raw_print("Party:")
@@ -66,16 +68,12 @@ def render_game(game_state):
         raw_print(f"  {msg}")
     raw_print()
 
-    # Controls hint
+    # Map or combat view
     raw_print("-" * width)
-    if display['mode'] == GameMode.EXPLORATION:
-        # Check if there's a pending door action
-        if hasattr(game_state, 'pending_door_action') and game_state.pending_door_action:
-            raw_print("Door Controls: L: lockpick | S: smash | Move away to cancel")
-        else:
-            raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | C: character")
-    elif display['mode'] == GameMode.COMBAT:
-        raw_print("Combat: A: attack | S: spell | I: item | F: flee | Q: quit")
+    if display['map']:
+        for line in display['map'].split('\n'):
+            raw_print(line)
+        raw_print()
     raw_print("=" * width)
 
 

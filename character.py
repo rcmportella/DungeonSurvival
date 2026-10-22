@@ -17,6 +17,7 @@ class Character:
         # Core ability scores (3-18 range typically)
         self.strength = 10
         self.dexterity = 10
+        self.initiative_bonus = 0  # e.g. Improved Initiative
         self.constitution = 10
         self.intelligence = 10
         self.wisdom = 10
@@ -135,6 +136,14 @@ class Character:
         score = getattr(self, ability.lower())
         return dice.modifier(score)
     
+    def get_initiative_modifier(self):
+        """D20 initiative modifier: Dexterity modifier plus misc bonuses"""
+        return self.get_ability_modifier('dexterity') + getattr(self, 'initiative_bonus', 0)
+
+    def roll_initiative(self):
+        """Roll initiative: d20 + initiative modifier"""
+        return dice.d20(1, self.get_initiative_modifier())
+
     def get_armor_class(self):
         """
         Calculate effective AC with equipped armor

@@ -87,19 +87,21 @@ You can also use the numpad for movement including diagonals:
 - Ability scores (STR, DEX, CON, INT, WIS, CHA)
 - Character classes: Fighter, Wizard, Rogue, Cleric
 - Combat mechanics (attack rolls, damage)
+- Initiative (`roll_initiative()`: d20 + DEX modifier + `initiative_bonus`)
 - Experience and leveling system
 - Spell slots for casters
 
 #### `monster.py`
 - Monster/enemy class
 - Hit dice based HP calculation
+- Dexterity score and initiative (`dexterity`, `initiative_bonus`, `roll_initiative()`)
 - Attack and damage mechanics
 - Special abilities support
 - Treasure drops
 
 #### `combat.py`
 - Turn-based combat system
-- Initiative rolling
+- Initiative rolling (d20 + DEX modifier + bonus; ties broken by modifier, then randomly)
 - Combat round execution
 - Attack resolution
 - Victory/defeat conditions
@@ -164,7 +166,7 @@ chmod +x main.py
 - Monsters and treasure randomly placed in rooms
 
 ### Combat System
-- Initiative-based turn order
+- Initiative-based turn order: d20 + DEX modifier + `initiative_bonus` for characters and monsters
 - Attack rolls: d20 + BAB + ability modifier vs AC
 - Damage rolls based on weapon/attack type
 - Experience and gold rewards on victory
@@ -180,7 +182,9 @@ goblin = Monster(
     hit_dice="1d8",
     armor_class=12,
     attack_bonus=1,
-    damage="1d6"
+    damage="1d6",
+    dexterity=14,        # optional, default 10; drives initiative
+    initiative_bonus=0   # optional extra initiative modifier
 )
 ```
 
