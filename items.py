@@ -4,10 +4,24 @@ Item system: Item is the base class for consumables, weapons, armor and treasure
 import dice
 
 
+COMMON = "Common"
+UNCOMMON = "Uncommon"
+RARE = "Rare"
+VERY_RARE = "Very Rare"
+LEGENDARY = "Legendary"
+RARITIES = (COMMON, UNCOMMON, RARE, VERY_RARE, LEGENDARY)  # ordered from most to least frequent
+RARITY_WEIGHTS = {COMMON: 100, UNCOMMON: 40, RARE: 15, VERY_RARE: 5, LEGENDARY: 2}
+LEVELS_PER_RARITY_TIER = 3  # dungeon levels 1-3 give Common only, 4-6 up to Uncommon, ...
+
+
 class Item:
     """Base class for all items"""
 
-    def __init__(self, name, description="", consumable=False, value=0, is_magic=False):
+    def __init__(self, name, description="", consumable=False, value=0, is_magic=False,
+                 rarity=COMMON):
+        if rarity not in RARITIES:
+            raise ValueError(f"rarity must be one of {RARITIES}, got {rarity!r}")
+        self.rarity = rarity
         self.name = name
         self.description = description
         self.consumable = consumable
@@ -30,13 +44,25 @@ class HealingPotion(Item):
             name="Potion of Healing",
             description="Restores 2d4+2 hit points",
             consumable=True,
-            value=50
+            value=50,
+            rarity=UNCOMMON
         )
 
     def use(self, character):
         healing = dice.d4(2, 2)
         character.heal(healing)
         return f"{character.name} drinks a healing potion and recovers {healing} HP! ({character.current_hp}/{character.max_hp})"
+
+class Ration(Item):
+    """Food package, consumed when the party rests (R key during exploration)"""
+
+    def __init__(self):
+        super().__init__(
+            name="Ration",
+            description="Food for one full rest",
+            consumable=False,
+            value=1
+        )
 
 
 class Weapon(Item):
@@ -53,7 +79,7 @@ class Weapon(Item):
     def __init__(self, name, damage, bonus=0, description="", value=0, is_magic=False,
                  category=SIMPLE, combat_type=MELEE, light=False, heavy=False,
                  two_handed=False, versatile=False, versatile_damage=None,
-                 finesse=False, reach=False, thrown=False):
+                 finesse=False, reach=False, thrown=False, rarity=COMMON):
         """
         Args:
             category: Weapon.SIMPLE or Weapon.MARTIAL
@@ -66,7 +92,8 @@ class Weapon(Item):
             reach: melee weapon that can hit from a larger distance
             thrown: can be used in melee or thrown as a ranged attack (then lost until the battle ends)
         """
-        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic)
+        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic,
+                         rarity=rarity)
         if category not in self.CATEGORIES:
             raise ValueError(f"category must be one of {self.CATEGORIES}, got {category!r}")
         if combat_type not in self.COMBAT_TYPES:
@@ -121,8 +148,9 @@ class Armor(Item):
     TYPES = (LIGHT, MEDIUM, HEAVY)
 
     def __init__(self, name, ac_bonus, description="", value=0, armor_type=LIGHT, is_magic=False,
-                 min_strength=0, stealth_disadvantage=False):
-        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic)
+                 min_strength=0, stealth_disadvantage=False, rarity=COMMON):
+        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic,
+                         rarity=rarity)
         if armor_type not in self.TYPES:
             raise ValueError(f"armor_type must be one of {self.TYPES}, got {armor_type!r}")
         self.ac_bonus = ac_bonus
@@ -150,8 +178,9 @@ class Armor(Item):
 class Shield(Item):
     """Shield held in one hand; cannot be combined with a two-handed weapon"""
 
-    def __init__(self, name, ac_bonus, description="", value=0, is_magic=False):
-        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic)
+    def __init__(self, name, ac_bonus, description="", value=0, is_magic=False, rarity=COMMON):
+        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic,
+                         rarity=rarity)
         self.ac_bonus = ac_bonus
 
     def __str__(self):
@@ -161,8 +190,9 @@ class Shield(Item):
 class Treasure(Item):
     """Valuables such as gems and jewelry, kept for their gold value"""
 
-    def __init__(self, name, value, description="", is_magic=False):
-        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic)
+    def __init__(self, name, value, description="", is_magic=False, rarity=COMMON):
+        super().__init__(name, description, consumable=False, value=value, is_magic=is_magic,
+                         rarity=rarity)
 
     def __str__(self):
         return f"{self.name} ({self.value} gp)"
@@ -171,11 +201,14 @@ class Treasure(Item):
 # Common items
 COMMON_ITEMS = {
     'healing_potion': HealingPotion(),
+    'ration': Ration(),
     'longsword': Weapon("Longsword", "1d8", 0, "A versatile steel blade", value=15,
                        category=Weapon.MARTIAL, versatile=True, versatile_damage="1d10"),
     'greatsword': Weapon("Greatsword", "2d6", 0, "A massive two-handed sword", value=50,
                          category=Weapon.MARTIAL, heavy=True, two_handed=True),
-    'dagger': Weapon("Dagger", "1d4", 0, "A small, quick blade", value=2,
+    'longbow': Weapon("Longbow", "1d8", 0, "A powerful ranged weapon", value=50, heavy=True,
+                         category=Weapon.MARTIAL, two_handed=True, combat_type="Ranged"),
+   'dagger': Weapon("Dagger", "1d4", 0, "A small, quick blade", value=2,
                      category=Weapon.SIMPLE, light=True, finesse=True, thrown=True),
     'mace': Weapon("Mace", "1d6", 0, "A blunt weapon favored by clerics", value=12,
                   category=Weapon.SIMPLE),
@@ -185,10 +218,11 @@ COMMON_ITEMS = {
                       category=Weapon.MARTIAL, versatile=True, versatile_damage="1d10"),
     'large_club': Weapon("Large Club", "2d6", 0, "A huge, crude club", value=15,
                       category=Weapon.SIMPLE, heavy=True, two_handed=True),
-    'magic_sword': Weapon("Magic Sword", "1d8", 1, "A finely enchanted blade", value=2000, is_magic=True,
+    'magic_sword': Weapon("Magic Sword", "1d8", 1, "A finely enchanted blade", value=2000, is_magic=True, rarity=RARE,
                         category=Weapon.MARTIAL, versatile=True, versatile_damage="1d10"),
     'shield': Shield("Shield", 2, "A sturdy shield of wood and iron", value=10),
-    'ruby': Treasure("Ruby", 1000, "A flawless blood-red gem"),
+    'ration': Ration(),
+    'ruby': Treasure("Ruby", 1000, "A flawless blood-red gem", rarity=RARE),
     'leather_armor': Armor("Leather Armor", 1, "Light, flexible armor", value=10, armor_type=Armor.LIGHT),
     'chain_mail': Armor("Chain Mail", 6, "Heavy metal armor", value=75, armor_type=Armor.HEAVY,
                         min_strength=13, stealth_disadvantage=True),
@@ -199,3 +233,20 @@ COMMON_ITEMS = {
     'plate_mail': Armor("Plate Mail", 8, "Full suit of interlocking metal plates", value=1500,
                         armor_type=Armor.HEAVY, min_strength=15, stealth_disadvantage=True)
 }
+
+
+def random_loot(dungeon_level):
+    """Pick a random catalog item (a fresh copy) allowed at this dungeon level.
+
+    Rarer items only appear deeper and are less likely than common ones."""
+    import copy
+    import random
+    tier = min((dungeon_level - 1) // LEVELS_PER_RARITY_TIER, len(RARITIES) - 1)
+    allowed = RARITIES[:tier + 1]
+    candidates = {}
+    for item in COMMON_ITEMS.values():
+        if item.rarity in allowed:
+            candidates[item.name] = item  # catalog has duplicate entries
+    items = list(candidates.values())
+    weights = [RARITY_WEIGHTS[i.rarity] for i in items]
+    return copy.copy(random.choices(items, weights=weights)[0])

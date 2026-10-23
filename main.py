@@ -8,6 +8,7 @@ import sys
 import shutil
 from game_state import GameState, GameMode
 from character import Character
+from party import Party
 from input_handler import InputHandler
 import colors
 
@@ -39,7 +40,7 @@ def render_game(game_state):
     
     # Title
     raw_print("=" * width)
-    raw_print(f"DUNGEON SURVIVAL - Level {display['dungeon_level']} | Turn {display['turn_count']}")
+    raw_print(f"DUNGEON SURVIVAL - Level {display['dungeon_level']} | Turn {display['turn_count']} | Paces since rest: {display['paces_since_rest']}/{display['hunger_limit']}")
     raw_print("=" * width)
     raw_print()
     
@@ -50,7 +51,7 @@ def render_game(game_state):
         if hasattr(game_state, 'pending_door_action') and game_state.pending_door_action:
             raw_print("Door Controls: L: lockpick | S: smash | Move away to cancel")
         else:
-            raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | C: character | K: colors on/off")
+            raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | R: rest | C: character | K: colors on/off")
     elif display['mode'] == GameMode.INVENTORY:
         raw_print("Backpack: choose with the listed keys | X: back/close")
     elif display['mode'] == GameMode.COMBAT:
@@ -102,6 +103,9 @@ def create_default_party():
     fighter.inventory.append(shield)
     fighter.inventory.append(HealingPotion())  # Fresh instance
     fighter.inventory.append(HealingPotion())
+    fighter.inventory.append(COMMON_ITEMS['ration'])  # Add a ration to the fighter's inventory
+    fighter.inventory.append(COMMON_ITEMS['ration'])  # Add another ration to the fighter's inventory
+    fighter.inventory.append(COMMON_ITEMS['ration'])  # Add a third ration to the fighter's inventory
     # Equip weapon and armor from inventory
     fighter.equipped_weapon = longsword
     fighter.equipped_armor = chain_mail
@@ -115,6 +119,9 @@ def create_default_party():
     staff = COMMON_ITEMS['staff']
     wizard.inventory.append(staff)
     wizard.inventory.append(HealingPotion())
+    wizard.inventory.append(COMMON_ITEMS['ration'])  # Add a ration to the wizard's inventory
+    wizard.inventory.append(COMMON_ITEMS['ration'])  # Add a second ration to the wizard's inventory
+    wizard.inventory.append(COMMON_ITEMS['ration'])  # Add a third ration to the wizard's inventory
     # Equip weapon from inventory
     wizard.equipped_weapon = staff
     # Add wizard spells
@@ -133,6 +140,9 @@ def create_default_party():
     cleric.inventory.append(mace)
     cleric.inventory.append(scale_mail)
     cleric.inventory.append(shield)
+    cleric.inventory.append(COMMON_ITEMS['ration'])  # Add a ration to the cleric's inventory
+    cleric.inventory.append(COMMON_ITEMS['ration'])  # Add a second ration to the cleric's inventory
+    cleric.inventory.append(COMMON_ITEMS['ration'])  # Add a third ration to the cleric's inventory
     cleric.inventory.append(HealingPotion())
     cleric.inventory.append(HealingPotion())
     # Equip weapon and armor from inventory
@@ -145,6 +155,27 @@ def create_default_party():
     party.add_member(cleric)
     
     return party
+
+
+def create_solo_party(index):
+    """Party with a single hero taken from the default party (0=Warrior, 1=Mage, 2=Healer)"""
+    hero = create_default_party().members[index]
+    party = Party()
+    party.add_member(hero)
+    return party
+
+
+def choose_hero():
+    """Ask the player which hero to play; returns the index in the default party"""
+    heroes = create_default_party().members
+    raw_print("Choose your hero:")
+    for i, hero in enumerate(heroes, 1):
+        raw_print(f"  {i}. {hero.name} ({hero.char_class}) - HP {hero.max_hp}, AC {hero.get_armor_class()}")
+    raw_print()
+    while True:
+        choice = input(f"Enter your choice (1-{len(heroes)}): ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(heroes):
+            return int(choice) - 1
 
 
 def handle_exploration_input(game_state, key):
@@ -189,6 +220,8 @@ def handle_exploration_input(game_state, key):
     # Other commands
     if key.lower() == 'i':
         game_state.open_inventory()
+    elif key.lower() == 'r':
+        game_state.rest()
     elif key.lower() == 'k':
         state = "on" if colors.toggle() else "off"
         game_state.add_message(f"Colors {state}.")
@@ -459,12 +492,13 @@ def main():
     else:
         raw_print("Generating random dungeon...")
     raw_print()
-    raw_print("Creating your party...")
+    hero_index = choose_hero()
+    raw_print()
     input("Press Enter to continue...")
     
     # Initialize game
     game_state = GameState(use_predesigned=use_predesigned, map_file=map_file)
-    game_state.party = create_default_party()
+    game_state.party = create_solo_party(hero_index)
     game_state.initialize_game()
     
     game_state.add_message("Welcome to Dungeon Survival!")

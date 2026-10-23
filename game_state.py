@@ -5,9 +5,14 @@ from enum import Enum
 from party import Party
 from dungeon_map import DungeonMap
 from combat import Combat
+from items import Ration, random_loot
 from monster import Monster, create_monster
 import random
 from colors import colorize
+
+HUNGER_LIMIT = 300        # paces before hunger sets in
+CHEST_ITEM_CHANCE = 0.5     # chance a chest holds an item besides gold
+STARVATION_INTERVAL = 10  # paces per HP lost once hungry
 
 
 class GameMode(Enum):
@@ -32,6 +37,7 @@ class GameState:
         self.current_map = None
         self.dungeon_level = 1
         self.turn_count = 0
+        self.paces_since_rest = 0
         self.combat_instance = None
         self.inventory_menu = None  # state of the backpack screens
         self.message_log = []
@@ -196,7 +202,41 @@ class GameState:
         self.turn_count += 1
         self.pick_up_dropped_items(new_x, new_y)
         self.current_map.update_fov(new_x, new_y, radius=3)
-        self.monsters_act()
+        self.apply_hunger()
+        if self.mode == GameMode.EXPLORATION:
+            self.monsters_act()
+        return True
+
+    def apply_hunger(self):
+        """Count a pace; once past the limit, living members lose 1 HP every few paces"""
+        self.paces_since_rest += 1
+        over = self.paces_since_rest - HUNGER_LIMIT
+        if over == 0:
+            self.add_message("You are exhausted and hungry! Rest (R) with a Ration or you will start losing HP.")
+        elif over > 0 and over % STARVATION_INTERVAL == 0:
+            for member in self.party.get_alive_members():
+                member.take_damage(1)
+                self.add_message(f"{member.name} suffers from hunger (-1 HP, {max(member.current_hp, 0)}/{member.max_hp}).")
+            if not self.party.get_alive_members():
+                self.add_message("Your party has starved to death!")
+                self.mode = GameMode.GAME_OVER
+
+    def rest(self):
+        """Eat a Ration to fully restore HP and spells and reset hunger"""
+        alive = self.party.get_alive_members()
+        for member in alive:
+            ration = next((i for i in member.inventory if isinstance(i, Ration)), None)
+            if ration:
+                member.remove_item(ration)
+                break
+        else:
+            self.add_message("You have no Ration to rest with!")
+            return False
+        for member in alive:
+            member.long_rest()
+        self.paces_since_rest = 0
+        self.turn_count += 1
+        self.add_message(f"{member.name} eats a Ration. The party rests: full HP and spells restored.")
         return True
         
     def monsters_act(self):
@@ -411,6 +451,10 @@ class GameState:
             self.stats['total_gold_collected'] += gold
             self.stats['chests_opened'] += 1
             self.add_message(f"Found {gold} gold!")
+            if random.random() < CHEST_ITEM_CHANCE:
+                loot = random_loot(self.dungeon_level)
+                self.party.get_alive_members()[0].add_item(loot)
+                self.add_message(f"Found {loot}!")
             self.current_map.chests.remove((x, y))
             # Change tile back to floor
             self.current_map.tiles[y][x].char = '.'
@@ -558,7 +602,9 @@ class GameState:
             'messages': self.message_log,
             'party_info': self.get_party_info(),
             'dungeon_level': self.dungeon_level,
-            'turn_count': self.turn_count
+            'turn_count': self.turn_count,
+            'paces_since_rest': self.paces_since_rest,
+            'hunger_limit': HUNGER_LIMIT
         }
         
         if self.mode == GameMode.EXPLORATION:
