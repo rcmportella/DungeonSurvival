@@ -9,6 +9,7 @@ import shutil
 from game_state import GameState, GameMode
 from character import Character
 from input_handler import InputHandler
+import colors
 
 # Global variables
 width = 80  # Default terminal width
@@ -49,7 +50,7 @@ def render_game(game_state):
         if hasattr(game_state, 'pending_door_action') and game_state.pending_door_action:
             raw_print("Door Controls: L: lockpick | S: smash | Move away to cancel")
         else:
-            raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | C: character")
+            raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | C: character | K: colors on/off")
     elif display['mode'] == GameMode.INVENTORY:
         raw_print("Backpack: choose with the listed keys | X: back/close")
     elif display['mode'] == GameMode.COMBAT:
@@ -182,6 +183,9 @@ def handle_exploration_input(game_state, key):
     # Other commands
     if key.lower() == 'i':
         game_state.open_inventory()
+    elif key.lower() == 'k':
+        state = "on" if colors.toggle() else "off"
+        game_state.add_message(f"Colors {state}.")
     elif key.lower() == 'c':
         # Display character sheets for all party members
         display_character_sheets(game_state)
@@ -382,6 +386,8 @@ def get_available_maps():
 
 def main():
     """Main game loop"""
+    if '--no-color' in sys.argv:
+        colors.set_enabled(False)
     columns, rows = shutil.get_terminal_size(fallback=(80, 24))
     global width
     width = min(columns, 120)  # Cap at 120 for readability

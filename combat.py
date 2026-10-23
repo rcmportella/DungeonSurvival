@@ -219,9 +219,7 @@ class Combat:
             rewards['gold'] += monster.gold
             rewards['items'].extend(copy.copy(item) for item in monster.treasure)
                     
-            # Award XP based on monster HD
-            hd = int(monster.hit_dice.split('d')[0])
-            rewards['experience'] += hd * 100
+            rewards['experience'] += monster.xp
             
         return rewards
         

@@ -27,6 +27,7 @@ DungeonSurvival is a roguelike game where you control a party of adventurers exp
 - **U** - Ascend stairs (when standing on `>`)
 - **I** - Open the backpack (choose a character, then an item to use, equip, transfer or drop)
 - **C** - View character sheet (not yet implemented)
+- **K** - Turn colors on/off
 - **Q** - Quit game
 
 #### Combat Mode
@@ -46,6 +47,12 @@ After the last enemy falls, press any key to collect experience, gold and loot.
   party member, and **Drop**
 - **X / Esc** - Go back one level (closes the backpack from the character list)
 - Dropped items appear as `$` on the map and return to their owner when the party walks over the tile
+
+### Colors
+The map, HP bars and combat log use ANSI colors (`colors.py`). Support is detected automatically:
+colors are off when output is not a terminal, when `TERM=dumb`, or when the `NO_COLOR`
+environment variable is set. You can also start with `python main.py --no-color`, or press **K** in
+exploration mode to toggle them at any time.
 
 ### Numpad Support
 You can also use the numpad for movement including diagonals:
@@ -149,7 +156,7 @@ chmod +x main.py
 
 1. **Game Start**: A default party of 3 characters (Fighter, Wizard, Cleric) is created
 2. **Exploration**: Navigate the dungeon using arrow keys
-3. **Encounters**: Moving onto a monster tile triggers combat
+3. **Encounters**: Moving onto a monster tile triggers combat. Monsters you have spotted hunt the party, moving one step per party move, and attack when adjacent
 4. **Combat**: Initiative-ordered, turn-based combat where you command each character (attack, spell, item, flee)
 5. **Treasure**: Collect gold from chests and gold/items from defeated monsters; manage items in the backpack
 6. **Progression**: Descend stairs to reach deeper, more challenging levels
@@ -185,7 +192,7 @@ chmod +x main.py
 - Attack rolls: d20 + BAB + ability modifier vs AC
 - Damage rolls based on weapon/attack type
 - Initiative is rolled once per combat and kept fixed; each character gets their own command each turn
-- Experience (100 per monster hit die), gold and item loot on victory
+- Experience (a fixed `xp` value per monster, e.g. goblin 25, orc 100, ogre 200, young red dragon 5900), gold and item loot on victory
 
 ## Customization
 
@@ -201,6 +208,8 @@ goblin = Monster(
     damage="1d6",
     dexterity=14,        # optional, default 10; drives initiative
     initiative_bonus=0,  # optional extra initiative modifier
+    cr=0.5,              # challenge rating (default: one per hit die)
+    xp=25,               # fixed experience for defeating it (optional)
     gold=10,             # gold pieces dropped (shared among the party)
     treasure=[COMMON_ITEMS['battle_axe']]  # Item instances dropped (from items import COMMON_ITEMS)
 )
@@ -221,7 +230,7 @@ fighter.set_abilities(str_score=16, dex=14, con=15, int_score=10, wis=12, cha=8)
 The game now supports **two monster spawning modes**:
 
 #### 1. Random Spawning (Default)
-Monsters are automatically generated and placed randomly in each level.
+Monsters are automatically generated and placed randomly in each level. Each monster has a challenge rating (`cr`), and a level only spawns monsters with `cr` up to the dungeon level (level 1: cr ≤ 1, level 2: cr ≤ 2, ...). Use `monster.create_monster(max_cr)` to create one; add new monster classes to `MONSTER_CLASSES`.
 
 #### 2. Predefined Placement
 Define specific monsters at exact positions in your map JSON files:

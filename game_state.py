@@ -5,8 +5,9 @@ from enum import Enum
 from party import Party
 from dungeon_map import DungeonMap
 from combat import Combat
-from monster import Monster
+from monster import Monster, create_monster
 import random
+from colors import colorize
 
 
 class GameMode(Enum):
@@ -139,24 +140,8 @@ class GameState:
         self.add_message(f"Entered dungeon level {self.dungeon_level}")
         
     def create_random_monster(self):
-        """Create a random monster appropriate for the dungeon level"""
-        monster_types = [
-            ("Goblin", "1d8", 12, 1, "1d6"),
-            ("Orc", "2d8", 13, 2, "1d8+1"),
-            ("Skeleton", "1d8", 13, 1, "1d6"),
-            ("Zombie", "2d8+2", 11, 1, "1d6+1"),
-            ("Kobold", "1d6", 12, 0, "1d4"),
-        ]
-        
-        # Higher level dungeons get tougher monsters
-        if self.dungeon_level >= 3:
-            monster_types.extend([
-                ("Bugbear", "3d8+3", 14, 3, "1d8+2"),
-                ("Ogre", "4d8+8", 13, 5, "2d6+3"),
-            ])
-            
-        name, hd, ac, ab, dmg = random.choice(monster_types)
-        return Monster(name, hit_dice=hd, armor_class=ac, attack_bonus=ab, damage=dmg)
+        """Create a random monster whose challenge rating is at most the dungeon level"""
+        return create_monster(self.dungeon_level)
         
     def move_party(self, dx, dy):
         """
@@ -210,15 +195,50 @@ class GameState:
         self.party.position = [new_x, new_y]
         self.turn_count += 1
         self.pick_up_dropped_items(new_x, new_y)
+        self.current_map.update_fov(new_x, new_y, radius=3)
+        self.monsters_act()
         return True
         
-    def start_combat(self, x, y):
-        """Start combat at given location"""
-        # Gather all monsters in adjacent tiles
-        monsters = []
-        monster_at_pos = self.current_map.get_monster_at(x, y)
-        if monster_at_pos:
-            monsters.append(monster_at_pos)
+    def monsters_act(self):
+        """Monsters the party has seen close in on the party; adjacent ones attack"""
+        if self.mode != GameMode.EXPLORATION:
+            return
+        px, py = self.party.position
+        game_map = self.current_map
+
+        for monster, mx, my in game_map.monsters:
+            if monster.is_alive() and game_map.tiles[my][mx].visible:
+                monster.alerted = True
+
+        hunters = [(m, x, y) for m, x, y in game_map.monsters if m.alerted and m.is_alive()]
+        if hunters:
+            dist = game_map.distance_map(px, py)
+            for monster, mx, my in hunters:
+                if max(abs(mx - px), abs(my - py)) <= 1:
+                    continue
+                best = None
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    d = dist.get((mx + dx, my + dy))
+                    if d is not None and (best is None or d < best[0]) \
+                            and not game_map.get_monster_at(mx + dx, my + dy) \
+                            and (mx + dx, my + dy) != (px, py):
+                        best = (d, mx + dx, my + dy)
+                if best and best[0] < dist.get((mx, my), float('inf')):
+                    game_map.move_monster(monster, mx, my, best[1], best[2])
+
+        attackers = [m for m, x, y in game_map.monsters
+                     if m.alerted and m.is_alive() and max(abs(x - px), abs(y - py)) <= 1]
+        if attackers:
+            self.add_message(f"{attackers[0].name} attacks the party!")
+            self.start_combat(px, py, attackers)
+
+    def start_combat(self, x, y, monsters=None):
+        """Start combat at given location (or against the given monsters)"""
+        if monsters is None:
+            monsters = []
+            monster_at_pos = self.current_map.get_monster_at(x, y)
+            if monster_at_pos:
+                monsters.append(monster_at_pos)
             
         if monsters:
             self.mode = GameMode.COMBAT
@@ -573,8 +593,26 @@ class GameState:
         ratio = current / maximum
         filled = int(ratio * length)
         bar = '█' * filled + '░' * (length - filled)
-        return f"[{bar}] {current}/{maximum} HP"
+        color = 'bright_green' if ratio > 0.5 else ('bright_yellow' if ratio > 0.25 else 'bright_red')
+        return f"[{colorize(bar, color)}] {current}/{maximum} HP"
         
+    @staticmethod
+    def _color_log_entry(entry):
+        text = entry.strip()
+        if text.startswith('HIT!'):
+            return colorize(entry, 'bright_green')
+        if text.startswith('MISS!'):
+            return colorize(entry, 'gray')
+        if 'has fallen' in text or 'is defeated' in text:
+            return colorize(entry, 'bright_red', 'bold')
+        if text.startswith('---') or text.startswith('Initiative'):
+            return colorize(entry, 'bright_cyan')
+        if 'damage' in text and 'takes' in text:
+            return colorize(entry, 'red')
+        if 'heals' in text or 'recovers' in text:
+            return colorize(entry, 'green')
+        return entry
+
     def get_combat_display(self):
         """Get combat display information"""
         combat = self.combat_instance
@@ -588,7 +626,14 @@ class GameState:
             marker = ">>" if member is actor else "  "
             status = "" if member.is_alive() else " [DEAD]"
             side = "" if is_player else " (enemy)"
-            lines.append(f" {marker} {init:>2}  {member.name}{side}{status}")
+            line = f" {marker} {init:>2}  {member.name}{side}{status}"
+            if member is actor:
+                line = colorize(line, 'bright_yellow', 'bold')
+            elif not member.is_alive():
+                line = colorize(line, 'gray')
+            elif not is_player:
+                line = colorize(line, 'red')
+            lines.append(line)
             
         lines.append("")
         lines.append("Enemies:")
@@ -603,7 +648,7 @@ class GameState:
         lines.append("")
         lines.append("Combat log:")
         log = combat.combat_log[-14:]
-        lines.extend(f"  {entry}" for entry in log)
+        lines.extend(f"  {self._color_log_entry(entry)}" for entry in log)
         
         lines.append("")
         if combat.status == 'victory':

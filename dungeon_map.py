@@ -3,6 +3,8 @@ Dungeon map generation and rendering
 """
 import random
 import json
+from colors import colorize
+
 
 
 class Tile:
@@ -71,6 +73,16 @@ class DungeonMap:
     Dungeon map with procedural generation
     """
     
+    TILE_COLORS = {
+        Tile.WALL: ('gray',),
+        Tile.FLOOR: ('white', 'dim'),
+        Tile.DOOR_HORIZONTAL: ('yellow',),
+        Tile.DOOR_VERTICAL: ('yellow',),
+        Tile.CHEST: ('bright_yellow',),
+        Tile.STAIRS_DOWN: ('bright_cyan', 'bold'),
+        Tile.STAIRS_UP: ('bright_cyan', 'bold'),
+    }
+
     def __init__(self, width=80, height=40):
         self.width = width
         self.height = height
@@ -171,6 +183,8 @@ class DungeonMap:
         
     def place_chest(self, x, y):
         """Place a treasure chest"""
+        if (x, y) in (self.stairs_up, self.stairs_down):
+            return False
         if not self.is_blocked(x, y):
             self.chests.append((x, y))
             self.tiles[y][x].char = Tile.CHEST
@@ -203,6 +217,30 @@ class DungeonMap:
                 self.tiles[y][x].blocked = not door.is_passable()
                 self.tiles[y][x].block_sight = door.is_blocking_sight()
         
+    def move_monster(self, monster, x, y, new_x, new_y):
+        """Move a monster to a free tile, keeping the monster list and tiles in sync"""
+        if self.is_blocked(new_x, new_y) or self.get_monster_at(new_x, new_y):
+            return False
+        self.tiles[y][x].monster = None
+        self.tiles[new_y][new_x].monster = monster
+        self.monsters = [(m, new_x, new_y) if m is monster else (m, mx, my)
+                         for m, mx, my in self.monsters]
+        return True
+
+    def distance_map(self, target_x, target_y):
+        """Walking distance (4-directional BFS) from every reachable tile to the target"""
+        from collections import deque
+        dist = {(target_x, target_y): 0}
+        queue = deque([(target_x, target_y)])
+        while queue:
+            x, y = queue.popleft()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if (nx, ny) not in dist and not self.is_blocked(nx, ny):
+                    dist[(nx, ny)] = dist[(x, y)] + 1
+                    queue.append((nx, ny))
+        return dist
+
     def populate_monsters(self, monster_factory, count=5):
         """Populate dungeon with random monsters"""
         placed = 0
@@ -214,6 +252,11 @@ class DungeonMap:
             x = random.randint(1, self.width - 2)
             y = random.randint(1, self.height - 2)
             
+            if (x, y) in (self.stairs_up, self.stairs_down):
+                continue
+            # Keep the starting area clear so the party isn't ambushed on arrival
+            if self.stairs_up and max(abs(x - self.stairs_up[0]), abs(y - self.stairs_up[1])) <= 5:
+                continue
             if not self.is_blocked(x, y) and not self.get_monster_at(x, y):
                 monster = monster_factory()
                 if self.place_monster(monster, x, y):
@@ -265,20 +308,23 @@ class DungeonMap:
                 elif tile.visible:
                     # Currently visible
                     if x == party_x and y == party_y and not in_combat:
-                        line.append(Tile.PARTY)
+                        line.append(colorize(Tile.PARTY, 'bright_green', 'bold'))
                     elif tile.monster and tile.monster.is_alive():
                         # Show monster as its first letter (uppercase)
-                        line.append(tile.monster.name[0].upper())
+                        line.append(colorize(tile.monster.name[0].upper(), 'bright_red', 'bold'))
                     elif self.dropped_items.get((x, y)):
-                        line.append('$')
+                        line.append(colorize('$', 'bright_yellow', 'bold'))
                     else:
-                        line.append(tile.char)
+                        line.append(colorize(tile.char, *self.TILE_COLORS.get(tile.char, ('white',))))
                 else:
                     # Explored but not currently visible - show darker/grayed version
-                    if tile.char == Tile.WALL:
-                        line.append(Tile.WALL)
+                    if tile.char in (Tile.STAIRS_DOWN, Tile.STAIRS_UP):
+                        # Discovered stairs stay visible from anywhere
+                        line.append(colorize(tile.char, *self.TILE_COLORS[tile.char]))
+                    elif tile.char == Tile.WALL:
+                        line.append(colorize(Tile.WALL, 'gray'))
                     else:
-                        line.append('·')  # Dimmed floor for explored areas
+                        line.append(colorize('·', 'gray', 'dim'))  # Dimmed floor for explored areas
             lines.append(''.join(line))
         return '\n'.join(lines)
     
@@ -316,6 +362,8 @@ class DungeonMap:
                 'armor_class': monster.armor_class,
                 'attack_bonus': monster.attack_bonus,
                 'damage': monster.damage,
+                'xp': monster.xp,
+                'cr': monster.cr,
                 'position': [x, y]
             }
             map_data['monsters'].append(monster_data)
@@ -379,7 +427,9 @@ class DungeonMap:
                     hit_dice=monster_data['hit_dice'],
                     armor_class=monster_data['armor_class'],
                     attack_bonus=monster_data['attack_bonus'],
-                    damage=monster_data['damage']
+                    damage=monster_data['damage'],
+                    xp=monster_data.get('xp'),
+                    cr=monster_data.get('cr')
                 )
                 x, y = monster_data['position']
                 self.place_monster(monster, x, y)

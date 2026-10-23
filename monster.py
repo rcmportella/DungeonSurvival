@@ -1,8 +1,24 @@
 """
 Monster and enemy classes for D20 combat
 """
+import random
 import dice
 from items import COMMON_ITEMS
+
+
+# Fixed xp values by monster name
+DEFAULT_XP = {
+    'kobold': 25,
+    'goblin': 25,
+    'skeleton': 50,
+    'zombie': 50,
+    'orc': 100,
+    'giant spider': 100,
+    'bugbear': 200,
+    'ogre': 450,
+    'troll': 1800,
+    'young red dragon': 5900,
+}
 
 
 class Monster:
@@ -13,7 +29,7 @@ class Monster:
     def __init__(self, name, hit_dice="1d8", armor_class=10, 
                  attack_bonus=0, damage="1d6", 
                  special_abilities=None, treasure=None,
-                 dexterity=10, initiative_bonus=0, gold=0):
+                 dexterity=10, initiative_bonus=0, gold=0, xp=None, cr=None):
         self.name = name
         self.dexterity = dexterity
         self.initiative_bonus = initiative_bonus  # e.g. Improved Initiative
@@ -22,6 +38,14 @@ class Monster:
         self.attack_bonus = attack_bonus
         self.damage = damage
         self.special_abilities = special_abilities or []
+        # Fixed experience awarded for defeating it; generic monsters fall back to
+        # a per-name table, then to 25 xp per hit die
+        if xp is None:
+            xp = DEFAULT_XP.get(name.lower(), 25 * int(hit_dice.split('d')[0]))
+        self.xp = xp
+        # Challenge rating; defaults to one per hit die for generic monsters
+        self.cr = cr if cr is not None else int(hit_dice.split('d')[0])
+        self.alerted = False  # set once the party has seen it; it then hunts the party
         self.gold = gold  # gold pieces dropped, added to the party's gold
         self.treasure = treasure or []  # Item instances (Weapon, Armor, Treasure...) dropped on death
         
@@ -138,6 +162,7 @@ class Goblin(Monster):
         super().__init__(
             dexterity=14,
             name="Goblin",
+            cr=0.5,
             hit_dice="2d6",
             armor_class=12,
             attack_bonus=0,
@@ -154,6 +179,7 @@ class Orc(Monster):
         super().__init__(
             dexterity=10,
             name="Orc",
+            cr=1,
             hit_dice="2d8",
             armor_class=13,
             attack_bonus=1,
@@ -170,6 +196,7 @@ class Skeleton(Monster):
         super().__init__(
             dexterity=14,
             name="Skeleton",
+            cr=0.5,
             hit_dice="1d12",
             armor_class=13,
             attack_bonus=2,
@@ -186,6 +213,7 @@ class Ogre(Monster):
         super().__init__(
             dexterity=8,
             name="Ogre",
+            cr=3,
             hit_dice="4d8+8",
             armor_class=16,
             attack_bonus=8,
@@ -202,6 +230,7 @@ class Dragon(Monster):
         super().__init__(
             dexterity=10,
             name="Young Red Dragon",
+            cr=10,
             hit_dice="13d12+39",
             armor_class=21,
             attack_bonus=18,
@@ -235,6 +264,7 @@ class GiantSpider(Monster):
         super().__init__(
             dexterity=17,
             name="Giant Spider",
+            cr=1,
             hit_dice="2d8",
             armor_class=14,
             attack_bonus=4,
@@ -251,6 +281,7 @@ class Zombie(Monster):
         super().__init__(
             dexterity=8,
             name="Zombie",
+            cr=1,
             hit_dice="2d12+3",
             armor_class=11,
             attack_bonus=2,
@@ -268,6 +299,7 @@ class Troll(Monster):
         super().__init__(
             dexterity=14,
             name="Troll",
+            cr=5,
             hit_dice="6d8+36",
             armor_class=16,
             attack_bonus=9,
@@ -279,32 +311,54 @@ class Troll(Monster):
         self.fortitude_save = 9
 
 
-# Monster factory
-MONSTER_TYPES = {
-    'goblin': Goblin,
-    'orc': Orc,
-    'skeleton': Skeleton,
-    'ogre': Ogre,
-    'dragon': Dragon,
-    'giant_spider': GiantSpider,
-    'zombie': Zombie,
-    'troll': Troll,
-}
+class Kobold(Monster):
+    """Tiny reptilian scavenger"""
+    def __init__(self):
+        super().__init__(
+            dexterity=12,
+            name="Kobold",
+            cr=0.25,
+            hit_dice="1d6",
+            armor_class=12,
+            attack_bonus=0,
+            damage="1d4",
+            gold=5,
+            treasure=[]
+        )
 
 
-def create_monster(monster_type):
+class Bugbear(Monster):
+    """Large, stealthy goblinoid"""
+    def __init__(self):
+        super().__init__(
+            dexterity=12,
+            name="Bugbear",
+            cr=2,
+            hit_dice="3d8+3",
+            armor_class=14,
+            attack_bonus=3,
+            damage="1d8+2",
+            gold=25,
+            treasure=[]
+        )
+
+
+# Every monster class available for random generation
+MONSTER_CLASSES = [Kobold, Goblin, Skeleton, Zombie, Orc, GiantSpider, Bugbear, Ogre, Troll, Dragon]
+
+
+def create_monster(max_cr):
     """
-    Create a monster by type name.
-    
+    Create a random monster whose challenge rating is at most max_cr
+    (dungeon level 1 -> cr up to 1, level 2 -> up to 2, and so on).
+
     Args:
-        monster_type: String name of monster type
-        
+        max_cr: Highest challenge rating allowed
+
     Returns:
         Monster instance
     """
-    monster_class = MONSTER_TYPES.get(monster_type.lower())
-    if monster_class:
-        return monster_class()
-    else:
-        # Default generic monster
-        return Monster(name="Unknown Creature", hit_dice="2d8", armor_class=12)
+    candidates = [cls for cls in MONSTER_CLASSES if cls().cr <= max_cr]
+    if not candidates:
+        candidates = [min(MONSTER_CLASSES, key=lambda cls: cls().cr)]
+    return random.choice(candidates)()
