@@ -236,8 +236,7 @@ COMMON_ITEMS = {
                       category=Weapon.MARTIAL, versatile=True, versatile_damage="1d10"),
     'large_club': Weapon("Large Club", "2d6", 0, "A huge, crude club", value=15,
                       category=Weapon.SIMPLE, heavy=True, two_handed=True),
-    'magic_sword': Weapon("Magic Sword", "1d8", 1, "A finely enchanted blade", value=2000, is_magic=True, rarity=RARE,
-                        category=Weapon.MARTIAL, versatile=True, versatile_damage="1d10"),
+    'magic_sword': Weapon("Magic Sword", "1d8", 1, "A finely enchanted blade", value=2000, is_magic=True, rarity=RARE,category=Weapon.MARTIAL, versatile=True, versatile_damage="1d10"),
     'shield': Shield("Shield", 2, "A sturdy shield of wood and iron", value=10),
     'ration': Ration(),
     'ruby': Treasure("Ruby", 1000, "A flawless blood-red gem", rarity=RARE),
@@ -247,9 +246,9 @@ COMMON_ITEMS = {
     'scale_mail': Armor("Scale Mail", 4, "Medium armor made of metal scales", value=50,
                         armor_type=Armor.MEDIUM, stealth_disadvantage=True),
     'splint_mail': Armor("Splint Mail", 7, "Vertical metal strips riveted to leather", value=200,
-                         armor_type=Armor.HEAVY, min_strength=15, stealth_disadvantage=True),
+                         armor_type=Armor.HEAVY, min_strength=15, stealth_disadvantage=True, rarity=UNCOMMON),
     'plate_mail': Armor("Plate Mail", 8, "Full suit of interlocking metal plates", value=1500,
-                        armor_type=Armor.HEAVY, min_strength=15, stealth_disadvantage=True)
+                        armor_type=Armor.HEAVY, min_strength=15, stealth_disadvantage=True, rarity=UNCOMMON)
 }
 
 
