@@ -38,6 +38,7 @@ class Character:
         self.inventory = []
         self.equipped_weapon = None
         self.equipped_armor = None
+        self.equipped_shield = None
         
         # Spells (for spellcasting classes)
         self.known_spells = []
@@ -156,7 +157,9 @@ class Character:
         
         # Add armor bonus if armor is equipped
         if self.equipped_armor and hasattr(self.equipped_armor, 'ac_bonus'):
-            return base_ac + self.equipped_armor.ac_bonus
+            base_ac += self.equipped_armor.ac_bonus
+        if self.equipped_shield:
+            base_ac += self.equipped_shield.ac_bonus
         
         return base_ac
     
@@ -255,14 +258,35 @@ class Character:
         self.inventory.append(item)
     
     def is_equipped(self, item):
-        return item is self.equipped_weapon or item is self.equipped_armor
+        return (item is self.equipped_weapon or item is self.equipped_armor
+                or item is self.equipped_shield)
+
+    def unequip_item(self, item):
+        """Unequip a specific item if it is currently worn"""
+        if self.equipped_weapon is item:
+            self.equipped_weapon = None
+        if self.equipped_armor is item:
+            self.equipped_armor = None
+        if self.equipped_shield is item:
+            self.equipped_shield = None
 
     def equip_item(self, item):
         """Equip a weapon or armor from the inventory. Returns a message or None."""
-        from items import Weapon, Armor
+        from items import Weapon, Armor, Shield
         if isinstance(item, Weapon):
+            if item.two_handed and self.equipped_shield:
+                return (f"{self.name} cannot wield {item.name} with a shield; "
+                        f"unequip {self.equipped_shield.name} first.")
             self.equipped_weapon = item
+        elif isinstance(item, Shield):
+            if self.equipped_weapon and getattr(self.equipped_weapon, 'two_handed', False):
+                return (f"{self.name} cannot use a shield with the two-handed "
+                        f"{self.equipped_weapon.name}; unequip it first.")
+            self.equipped_shield = item
         elif isinstance(item, Armor):
+            if not item.can_wear(self.strength):
+                return (f"{self.name} is too weak to wear {item.name} "
+                        f"(needs Strength above {item.min_strength}).")
             self.equipped_armor = item
         else:
             return None
@@ -273,10 +297,7 @@ class Character:
         for i, owned in enumerate(self.inventory):
             if owned is item:
                 del self.inventory[i]
-                if self.equipped_weapon is item:
-                    self.equipped_weapon = None
-                if self.equipped_armor is item:
-                    self.equipped_armor = None
+                self.unequip_item(item)
                 return True
         return False
 
@@ -435,7 +456,9 @@ class Character:
                 sheet += f"  Weapon: {self.equipped_weapon}\n"
             if self.equipped_armor:
                 sheet += f"  Armor:  {self.equipped_armor}\n"
-            if not self.equipped_weapon and not self.equipped_armor:
+            if self.equipped_shield:
+                sheet += f"  Shield: {self.equipped_shield}\n"
+            if not (self.equipped_weapon or self.equipped_armor or self.equipped_shield):
                 sheet += "  None equipped\n"
             
             # Inventory

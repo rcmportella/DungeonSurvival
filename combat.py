@@ -4,7 +4,7 @@ Combat system with D20 mechanics
 import copy
 import random
 import dice
-from items import Item, HealingPotion, Weapon, Armor, Treasure, COMMON_ITEMS  # noqa: F401 (re-exported)
+from items import Item, HealingPotion, Weapon, Armor, Shield, Treasure, COMMON_ITEMS  # noqa: F401 (re-exported)
 
 
 class Combat:

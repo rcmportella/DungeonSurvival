@@ -275,11 +275,11 @@ class GameState:
 
     def _item_actions(self, character, item):
         """List of (label, action) available for an item"""
-        from items import Weapon, Armor
+        from items import Weapon, Armor, Shield
         actions = []
         if getattr(item, 'consumable', False):
             actions.append(("Use", 'use'))
-        if isinstance(item, (Weapon, Armor)):
+        if isinstance(item, (Weapon, Armor, Shield)):
             if character.is_equipped(item):
                 actions.append(("Unequip", 'unequip'))
             else:
@@ -343,10 +343,7 @@ class GameState:
             if action == 'equip':
                 self.add_message(character.equip_item(item))
             else:
-                if character.equipped_weapon is item:
-                    character.equipped_weapon = None
-                if character.equipped_armor is item:
-                    character.equipped_armor = None
+                character.unequip_item(item)
                 self.add_message(f"{character.name} unequips {item}.")
             self._back_to_items(character)
         elif action == 'transfer':

@@ -96,13 +96,16 @@ def create_default_party():
     # Add items to fighter's inventory
     longsword = COMMON_ITEMS['longsword']
     chain_mail = COMMON_ITEMS['chain_mail']
+    shield = COMMON_ITEMS['shield']
     fighter.inventory.append(longsword)
     fighter.inventory.append(chain_mail)
+    fighter.inventory.append(shield)
     fighter.inventory.append(HealingPotion())  # Fresh instance
     fighter.inventory.append(HealingPotion())
     # Equip weapon and armor from inventory
     fighter.equipped_weapon = longsword
     fighter.equipped_armor = chain_mail
+    fighter.equipped_shield = shield
     party.add_member(fighter)
     
     # Create a wizard
@@ -125,14 +128,17 @@ def create_default_party():
     #cleric.roll_abilities()
     cleric.set_abilities(str_score=12, dex=10, con=14, int_score=10, wis=16, cha=13)
     mace = COMMON_ITEMS['mace']
+    shield = COMMON_ITEMS['shield']
     scale_mail = COMMON_ITEMS['scale_mail']
     cleric.inventory.append(mace)
     cleric.inventory.append(scale_mail)
+    cleric.inventory.append(shield)
     cleric.inventory.append(HealingPotion())
     cleric.inventory.append(HealingPotion())
     # Equip weapon and armor from inventory
     cleric.equipped_weapon = mace
     cleric.equipped_armor = scale_mail
+    cleric.equipped_shield = shield
     # Add cleric spells
     cleric.known_spells.append(SPELL_LIBRARY['cure_light_wounds'])
     cleric.known_spells.append(SPELL_LIBRARY['bless'])
