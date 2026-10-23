@@ -248,6 +248,10 @@ class GameState:
                 self.add_message(f"Combat started against {len(monsters)} enemy(ies)!")
                 self.add_message("Turn order: " + ", ".join(
                     c.name for c, _, _ in self.combat_instance.initiative_order))
+                # A leading monster turn may already have ended the combat
+                if self.combat_instance.status == 'defeat':
+                    self.add_message("Your party has been defeated!")
+                    self.mode = GameMode.GAME_OVER
             
     def pick_up_dropped_items(self, x, y):
         """Return items dropped on this tile to their previous owners"""

@@ -302,6 +302,10 @@ def handle_combat_input(game_state, key):
         _collect_victory_rewards(game_state, combat)
         return True
 
+    if combat.status == 'defeat':
+        game_state.mode = GameMode.GAME_OVER
+        return True
+
     actor = combat.current_actor()
     if actor is None:
         return True

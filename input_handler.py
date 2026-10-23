@@ -100,7 +100,10 @@ class InputHandler:
                 ready, _, _ = select.select([fd], [], [], 0.05)
                 if ready:
                     char += os.read(fd, 2).decode('utf-8', errors='ignore')
-                
+
+            # Raw mode disables the terminal's own Ctrl-C handling
+            if char == '\x03':
+                raise KeyboardInterrupt
             return char
             
     def parse_movement_key(self, key):
