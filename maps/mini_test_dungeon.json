@@ -35,24 +35,8 @@
           7
         ]
       ],
-      "monsters": [
-        {
-          "name": "Goblin Guard",
-          "hit_dice": "2d8",
-          "armor_class": 14,
-          "attack_bonus": 2,
-          "damage": "1d6+1",
-          "position": [8, 7]
-        },
-        {
-          "name": "Orc Warrior",
-          "hit_dice": "3d8+3",
-          "armor_class": 15,
-          "attack_bonus": 3,
-          "damage": "1d8+2",
-          "position": [22, 7]
-        }
-      ]
+      "monsters": [],
+      "doors": []
     },
     {
       "width": 30,
@@ -92,7 +76,8 @@
           8
         ]
       ],
-      "monsters": []
+      "monsters": [],
+      "doors": []
     }
   ]
 }
