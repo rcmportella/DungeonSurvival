@@ -15,7 +15,7 @@ DungeonSurvival is a roguelike game where you control a party of adventurers exp
 - `1-6` - Individual party members (combat mode)
 - `A-Z` - Monsters (letter represents monster type)
 - `|` or `-` - Doors
-- `$` - Treasure chests
+- `$` - Treasure chests, or items dropped by the party (walk over it to pick them up)
 - `<` - Stairs down to deeper levels
 - `>` - Stairs up to previous levels
 
@@ -25,16 +25,27 @@ DungeonSurvival is a roguelike game where you control a party of adventurers exp
 - **Arrow Keys / WASD** - Move the party
 - **D** - Descend stairs (when standing on `<`)
 - **U** - Ascend stairs (when standing on `>`)
-- **I** - Open inventory (not yet implemented)
+- **I** - Open the backpack (choose a character, then an item to use, equip, transfer or drop)
 - **C** - View character sheet (not yet implemented)
 - **Q** - Quit game
 
 #### Combat Mode
-- **A** - Attack with equipped weapon
-- **S** - Cast spell (partial implementation)
-- **I** - Use item (not yet implemented)
-- **F** - Flee from combat
+Each party member acts on their own turn, in initiative order (the `>>` marker shows who is up):
+- **A** - Attack with the equipped weapon (choose a target when several enemies are alive)
+- **S** - Cast a spell (choose the spell, then an enemy or ally target)
+- **I** - Use a consumable item (e.g. healing potion)
+- **F** - Try to flee for the whole party (d20 + DEX modifier vs 10)
+- **X / Esc** - Cancel a menu
 - **Q** - Quit game
+
+After the last enemy falls, press any key to collect experience, gold and loot.
+
+#### Backpack (Inventory)
+- Pick a character, then an item; the available actions depend on the item type:
+  **Use** (consumables), **Equip/Unequip** (weapons and armor), **Transfer** to another
+  party member, and **Drop**
+- **X / Esc** - Go back one level (closes the backpack from the character list)
+- Dropped items appear as `$` on the map and return to their owner when the party walks over the tile
 
 ### Numpad Support
 You can also use the numpad for movement including diagonals:
@@ -100,11 +111,15 @@ You can also use the numpad for movement including diagonals:
 - Treasure drops
 
 #### `combat.py`
-- Turn-based combat system
-- Initiative rolling (d20 + DEX modifier + bonus; ties broken by modifier, then randomly)
-- Combat round execution
-- Attack resolution
-- Victory/defeat conditions
+- Turn-based combat system for the whole party vs. the monsters
+- Initiative rolled once at the start (d20 + DEX modifier + bonus; ties broken by modifier, then randomly); the order never changes
+- One command per character turn; monster turns resolve automatically against random living party members
+- Detailed combat log (dice rolled, total vs AC, damage and who received it)
+- Victory/defeat/flee conditions and rewards
+
+#### `items.py`
+- `Item` base class for all items, with `Weapon`, `Armor`, `Treasure` and consumables such as `HealingPotion`
+- `COMMON_ITEMS` catalog of ready-made items
 
 #### `spell.py`
 - Spell system with D20 rules
@@ -135,8 +150,8 @@ chmod +x main.py
 1. **Game Start**: A default party of 3 characters (Fighter, Wizard, Cleric) is created
 2. **Exploration**: Navigate the dungeon using arrow keys
 3. **Encounters**: Moving onto a monster tile triggers combat
-4. **Combat**: Turn-based combat with attack, spell, and flee options
-5. **Treasure**: Collect gold from treasure chests
+4. **Combat**: Initiative-ordered, turn-based combat where you command each character (attack, spell, item, flee)
+5. **Treasure**: Collect gold from chests and gold/items from defeated monsters; manage items in the backpack
 6. **Progression**: Descend stairs to reach deeper, more challenging levels
 7. **Victory**: Escape by ascending stairs from level 1
 
@@ -146,7 +161,7 @@ chmod +x main.py
 - `EXPLORATION` - Main exploration mode
 - `COMBAT` - Turn-based combat
 - `MENU` - Menu screens (not yet implemented)
-- `INVENTORY` - Inventory management (not yet implemented)
+- `INVENTORY` - Backpack: use, equip, transfer and drop items
 - `CHARACTER_SHEET` - Character details (not yet implemented)
 - `GAME_OVER` - Defeat condition
 - `VICTORY` - Win condition
@@ -169,7 +184,8 @@ chmod +x main.py
 - Initiative-based turn order: d20 + DEX modifier + `initiative_bonus` for characters and monsters
 - Attack rolls: d20 + BAB + ability modifier vs AC
 - Damage rolls based on weapon/attack type
-- Experience and gold rewards on victory
+- Initiative is rolled once per combat and kept fixed; each character gets their own command each turn
+- Experience (100 per monster hit die), gold and item loot on victory
 
 ## Customization
 
@@ -184,7 +200,9 @@ goblin = Monster(
     attack_bonus=1,
     damage="1d6",
     dexterity=14,        # optional, default 10; drives initiative
-    initiative_bonus=0   # optional extra initiative modifier
+    initiative_bonus=0,  # optional extra initiative modifier
+    gold=10,             # gold pieces dropped (shared among the party)
+    treasure=[COMMON_ITEMS['battle_axe']]  # Item instances dropped (from items import COMMON_ITEMS)
 )
 ```
 
@@ -287,10 +305,10 @@ self.current_map.generate(
 ## Future Enhancements
 
 ### Planned Features
-- [ ] Full inventory system with item management
+- [x] Inventory system with item management (use, equip, transfer, drop)
 - [ ] Character sheet viewing and equipment
-- [ ] Spell casting in combat
-- [ ] Item usage (potions, scrolls, etc.)
+- [x] Spell casting in combat
+- [ ] Scrolls and other item types
 - [ ] Save/load game functionality
 - [ ] More monster types with special abilities
 - [ ] Traps and secret doors
@@ -301,7 +319,7 @@ self.current_map.generate(
 - [ ] Permadeath mode
 
 ### Combat Enhancements
-- [ ] Multi-character combat (full party vs multiple monsters)
+- [x] Multi-character combat (full party vs multiple monsters)
 - [ ] Positioning and area-of-effect spells
 - [ ] Status effects (poison, stun, etc.)
 - [ ] Critical hits and fumbles

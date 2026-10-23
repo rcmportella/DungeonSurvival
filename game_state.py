@@ -32,6 +32,7 @@ class GameState:
         self.dungeon_level = 1
         self.turn_count = 0
         self.combat_instance = None
+        self.inventory_menu = None  # state of the backpack screens
         self.message_log = []
         self.max_log_messages = 10
         
@@ -208,6 +209,7 @@ class GameState:
         # Move party
         self.party.position = [new_x, new_y]
         self.turn_count += 1
+        self.pick_up_dropped_items(new_x, new_y)
         return True
         
     def start_combat(self, x, y):
@@ -220,11 +222,166 @@ class GameState:
             
         if monsters:
             self.mode = GameMode.COMBAT
-            # For now, use first party member in combat
-            if self.party.members:
-                self.combat_instance = Combat(self.party.members[0], monsters)
+            alive = self.party.get_alive_members()
+            if alive:
+                self.combat_instance = Combat(alive, monsters)
                 self.add_message(f"Combat started against {len(monsters)} enemy(ies)!")
+                self.add_message("Turn order: " + ", ".join(
+                    c.name for c, _, _ in self.combat_instance.initiative_order))
             
+    def pick_up_dropped_items(self, x, y):
+        """Return items dropped on this tile to their previous owners"""
+        dropped = self.current_map.dropped_items.pop((x, y), [])
+        alive = self.party.get_alive_members()
+        if not dropped or not alive:
+            if dropped:
+                self.current_map.dropped_items[(x, y)] = dropped
+            return
+        for item, owner in dropped:
+            receiver = owner if owner in alive else alive[0]
+            receiver.add_item(item)
+            self.add_message(f"{receiver.name} picks up {item}.")
+
+    # ---- Backpack / inventory ----
+    ITEM_KEYS = "123456789abcdefghijklmnopqrstuvwyz"  # 'x' is reserved for "back"
+
+    def open_inventory(self):
+        self.mode = GameMode.INVENTORY
+        self.inventory_menu = {'stage': 'character'}
+
+    def close_inventory(self):
+        self.mode = GameMode.EXPLORATION
+        self.inventory_menu = None
+
+    def _item_actions(self, character, item):
+        """List of (label, action) available for an item"""
+        from items import Weapon, Armor
+        actions = []
+        if getattr(item, 'consumable', False):
+            actions.append(("Use", 'use'))
+        if isinstance(item, (Weapon, Armor)):
+            if character.is_equipped(item):
+                actions.append(("Unequip", 'unequip'))
+            else:
+                actions.append(("Equip", 'equip'))
+        if len(self.party.members) > 1:
+            actions.append(("Transfer to another character", 'transfer'))
+        actions.append(("Drop", 'drop'))
+        return actions
+
+    def inventory_input(self, key):
+        """Handle a key press in the backpack screens"""
+        menu = self.inventory_menu
+        if menu is None:
+            self.close_inventory()
+            return
+        key = key.lower()
+        if key in ('x', '\x1b'):
+            stage = menu['stage']
+            if stage == 'character':
+                self.close_inventory()
+            elif stage == 'items':
+                self.inventory_menu = {'stage': 'character'}
+            else:
+                self.inventory_menu = {'stage': 'items', 'character': menu['character']}
+            return
+        if len(key) != 1 or key not in self.ITEM_KEYS:
+            return
+        index = self.ITEM_KEYS.index(key)
+        stage = menu['stage']
+
+        if stage == 'character':
+            if index < len(self.party.members):
+                self.inventory_menu = {'stage': 'items', 'character': self.party.members[index]}
+        elif stage == 'items':
+            character = menu['character']
+            if index < len(character.inventory):
+                self.inventory_menu = {'stage': 'actions', 'character': character,
+                                       'item': character.inventory[index]}
+        elif stage == 'actions':
+            actions = self._item_actions(menu['character'], menu['item'])
+            if index < len(actions):
+                self._run_item_action(menu, actions[index][1])
+        elif stage == 'transfer':
+            others = [m for m in self.party.members if m is not menu['character']]
+            if index < len(others):
+                self._transfer_item(menu['character'], others[index], menu['item'])
+
+    def _back_to_items(self, character):
+        self.inventory_menu = {'stage': 'items', 'character': character}
+
+    def _run_item_action(self, menu, action):
+        character, item = menu['character'], menu['item']
+        if action == 'use':
+            if not character.is_alive():
+                self.add_message(f"{character.name} cannot use items.")
+            else:
+                result = character.use_item(item.name)
+                self.add_message(result or f"Cannot use {item.name}!")
+            self._back_to_items(character)
+        elif action in ('equip', 'unequip'):
+            if action == 'equip':
+                self.add_message(character.equip_item(item))
+            else:
+                if character.equipped_weapon is item:
+                    character.equipped_weapon = None
+                if character.equipped_armor is item:
+                    character.equipped_armor = None
+                self.add_message(f"{character.name} unequips {item}.")
+            self._back_to_items(character)
+        elif action == 'transfer':
+            self.inventory_menu = {'stage': 'transfer', 'character': character, 'item': item}
+        elif action == 'drop':
+            x, y = self.party.position
+            character.remove_item(item)
+            self.current_map.dropped_items.setdefault((x, y), []).append((item, character))
+            self.add_message(f"{character.name} drops {item}. It can be picked up here ($).")
+            self._back_to_items(character)
+
+    def _transfer_item(self, giver, receiver, item):
+        giver.remove_item(item)
+        receiver.add_item(item)
+        self.add_message(f"{giver.name} gives {item} to {receiver.name}.")
+        self._back_to_items(giver)
+
+    def get_inventory_display(self):
+        menu = self.inventory_menu
+        if not menu:
+            return ""
+        keys = self.ITEM_KEYS
+        lines = ["=== BACKPACK ===", ""]
+        stage = menu['stage']
+        if stage == 'character':
+            lines.append("Choose a character (X: close):")
+            for i, m in enumerate(self.party.members):
+                lines.append(f"  {keys[i]}. {m.name} ({m.char_class}) - {len(m.inventory)} items, {m.gold} gp")
+            return '\n'.join(lines)
+
+        character = menu['character']
+        if stage == 'items':
+            lines.append(f"{character.name}'s backpack - {character.gold} gp (X: back):")
+            if not character.inventory:
+                lines.append("  (empty)")
+            for i, item in enumerate(character.inventory[:len(keys)]):
+                tag = " [equipped]" if character.is_equipped(item) else ""
+                lines.append(f"  {keys[i]}. {item}{tag}")
+        else:
+            item = menu['item']
+            lines.append(f"{character.name}: {item}")
+            if item.description:
+                lines.append(f"  {item.description}")
+            lines.append("")
+            if stage == 'actions':
+                lines.append("Choose an action (X: back):")
+                for i, (label, _) in enumerate(self._item_actions(character, item)):
+                    lines.append(f"  {keys[i]}. {label}")
+            elif stage == 'transfer':
+                lines.append("Transfer to (X: back):")
+                others = [m for m in self.party.members if m is not character]
+                for i, m in enumerate(others):
+                    lines.append(f"  {keys[i]}. {m.name}")
+        return '\n'.join(lines)
+
     def handle_chest(self, x, y):
         """Handle opening a treasure chest"""
         if (x, y) in self.current_map.chests:
@@ -396,6 +553,8 @@ class GameState:
             )
         elif self.mode == GameMode.COMBAT:
             display['map'] = self.get_combat_display()
+        elif self.mode == GameMode.INVENTORY:
+            display['map'] = self.get_inventory_display()
             
         return display
         
@@ -418,25 +577,54 @@ class GameState:
         
     def get_combat_display(self):
         """Get combat display information"""
-        if not self.combat_instance:
+        combat = self.combat_instance
+        if not combat:
             return ""
-            
-        lines = []
-        lines.append("=== COMBAT ===")
-        lines.append("")
-        lines.append("Party:")
-        for i, member in enumerate(self.party.members):
-            hp_bar = self.create_hp_bar(member.current_hp, member.max_hp)
-            lines.append(f"  {i+1}. {member.name} {hp_bar}")
+        actor = combat.current_actor()
+        
+        lines = [f"=== COMBAT - Round {combat.round} ===", ""]
+        lines.append("Turn order:")
+        for member, init, is_player in combat.initiative_order:
+            marker = ">>" if member is actor else "  "
+            status = "" if member.is_alive() else " [DEAD]"
+            side = "" if is_player else " (enemy)"
+            lines.append(f" {marker} {init:>2}  {member.name}{side}{status}")
             
         lines.append("")
         lines.append("Enemies:")
-        for i, monster in enumerate(self.combat_instance.monsters):
+        alive = combat.alive_monsters()
+        for monster in combat.monsters:
             if monster.is_alive():
                 hp_bar = self.create_hp_bar(monster.current_hp, monster.max_hp)
-                lines.append(f"  {chr(65+i)}. {monster.name} {hp_bar}")
+                lines.append(f"  {alive.index(monster)+1}. {monster.name} (AC {monster.armor_class}) {hp_bar}")
             else:
-                lines.append(f"  {chr(65+i)}. {monster.name} [DEAD]")
+                lines.append(f"  -. {monster.name} [DEAD]")
+                
+        lines.append("")
+        lines.append("Combat log:")
+        log = combat.combat_log[-14:]
+        lines.extend(f"  {entry}" for entry in log)
+        
+        lines.append("")
+        if combat.status == 'victory':
+            lines.append(">> All enemies defeated! Press any key to continue...")
+        elif actor:
+            menu = combat.menu
+            if not menu:
+                lines.append(f">> {actor.name}'s turn: A: attack | S: spell | I: item | F: flee")
+            elif menu['stage'] == 'spell':
+                lines.append(f">> {actor.name}: choose a spell (X: cancel)")
+                for i, spell in enumerate(menu['options']):
+                    slots = actor.spell_slots.get(spell.level, 0)
+                    lines.append(f"   {i+1}. {spell.name} (level {spell.level}, slots: {slots})")
+            elif menu['stage'] == 'item':
+                lines.append(f">> {actor.name}: choose an item (X: cancel)")
+                for i, name in enumerate(menu['options']):
+                    lines.append(f"   {i+1}. {name}")
+            elif menu['stage'] == 'target':
+                lines.append(f">> {actor.name}: choose a target (X: cancel)")
+                for i, target in enumerate(menu['options']):
+                    lines.append(f"   {i+1}. {target.name} ({target.current_hp}/{target.max_hp} HP)")
                 
         return '\n'.join(lines)
     

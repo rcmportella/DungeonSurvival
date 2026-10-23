@@ -79,6 +79,7 @@ class DungeonMap:
         self.monsters = []  # List of (monster, x, y) tuples
         self.chests = []    # List of (x, y) tuples
         self.doors = []     # List of (door, x, y) tuples
+        self.dropped_items = {}  # (x, y) -> list of (item, owner) dropped by the party
         self.stairs_down = None
         self.stairs_up = None
         
@@ -268,6 +269,8 @@ class DungeonMap:
                     elif tile.monster and tile.monster.is_alive():
                         # Show monster as its first letter (uppercase)
                         line.append(tile.monster.name[0].upper())
+                    elif self.dropped_items.get((x, y)):
+                        line.append('$')
                     else:
                         line.append(tile.char)
                 else:

@@ -2,6 +2,7 @@
 Monster and enemy classes for D20 combat
 """
 import dice
+from items import COMMON_ITEMS
 
 
 class Monster:
@@ -12,7 +13,7 @@ class Monster:
     def __init__(self, name, hit_dice="1d8", armor_class=10, 
                  attack_bonus=0, damage="1d6", 
                  special_abilities=None, treasure=None,
-                 dexterity=10, initiative_bonus=0):
+                 dexterity=10, initiative_bonus=0, gold=0):
         self.name = name
         self.dexterity = dexterity
         self.initiative_bonus = initiative_bonus  # e.g. Improved Initiative
@@ -21,7 +22,8 @@ class Monster:
         self.attack_bonus = attack_bonus
         self.damage = damage
         self.special_abilities = special_abilities or []
-        self.treasure = treasure or []
+        self.gold = gold  # gold pieces dropped, added to the party's gold
+        self.treasure = treasure or []  # Item instances (Weapon, Armor, Treasure...) dropped on death
         
         # Calculate HP from hit dice
         self.max_hp = self._roll_hit_points()
@@ -140,7 +142,8 @@ class Goblin(Monster):
             armor_class=12,
             attack_bonus=0,
             damage="1d4+2",
-            treasure=["10 gold pieces"]
+            gold=10,
+            treasure=[]
         )
         self.reflex_save = 3
 
@@ -155,7 +158,8 @@ class Orc(Monster):
             armor_class=13,
             attack_bonus=1,
             damage="1d8",
-            treasure=["20 gold pieces", "Battle axe"]
+            gold=20,
+            treasure=[COMMON_ITEMS['battle_axe']]
         )
         self.fortitude_save = 3
 
@@ -186,7 +190,8 @@ class Ogre(Monster):
             armor_class=16,
             attack_bonus=8,
             damage="2d8+7",
-            treasure=["50 gold pieces", "Large club"]
+            gold=50,
+            treasure=[COMMON_ITEMS['large_club']]
         )
         self.fortitude_save = 5
 
@@ -202,7 +207,8 @@ class Dragon(Monster):
             attack_bonus=18,
             damage="2d6+7",
             special_abilities=["Breath Weapon: 8d10 fire damage, Reflex DC 19 for half"],
-            treasure=["500 gold pieces", "Magic sword +1", "Ruby worth 1000gp"]
+            gold=500,
+            treasure=[COMMON_ITEMS['magic_sword'], COMMON_ITEMS['ruby']]
         )
         self.fortitude_save = 11
         self.reflex_save = 8
@@ -267,7 +273,8 @@ class Troll(Monster):
             attack_bonus=9,
             damage="1d6+6",
             special_abilities=["Regeneration 5: heals 5 HP per round"],
-            treasure=["30 gold pieces"]
+            gold=30,
+            treasure=[]
         )
         self.fortitude_save = 9
 

@@ -254,6 +254,32 @@ class Character:
         """Add item to inventory"""
         self.inventory.append(item)
     
+    def is_equipped(self, item):
+        return item is self.equipped_weapon or item is self.equipped_armor
+
+    def equip_item(self, item):
+        """Equip a weapon or armor from the inventory. Returns a message or None."""
+        from items import Weapon, Armor
+        if isinstance(item, Weapon):
+            self.equipped_weapon = item
+        elif isinstance(item, Armor):
+            self.equipped_armor = item
+        else:
+            return None
+        return f"{self.name} equips {item}."
+
+    def remove_item(self, item):
+        """Take a specific item object out of the inventory, unequipping it"""
+        for i, owned in enumerate(self.inventory):
+            if owned is item:
+                del self.inventory[i]
+                if self.equipped_weapon is item:
+                    self.equipped_weapon = None
+                if self.equipped_armor is item:
+                    self.equipped_armor = None
+                return True
+        return False
+
     def add_gold(self, amount):
         """Add gold to character's wealth"""
         self.gold += amount

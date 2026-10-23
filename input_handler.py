@@ -1,6 +1,7 @@
 """
 Input handling for keyboard controls
 """
+import os
 import sys
 import tty
 import termios
@@ -89,12 +90,16 @@ class InputHandler:
                 if not ready:
                     return None
                     
-            char = sys.stdin.read(1)
+            # Read the file descriptor directly: sys.stdin's buffer would hide
+            # pending bytes from select() and break Esc/arrow detection
+            fd = sys.stdin.fileno()
+            char = os.read(fd, 1).decode('utf-8', errors='ignore')
             
-            # Check for escape sequences (arrow keys, etc.)
             if char == '\x1b':
-                # Read the next two characters for arrow keys
-                char += sys.stdin.read(2)
+                # A lone Esc has nothing following it; arrow keys send two more bytes
+                ready, _, _ = select.select([fd], [], [], 0.05)
+                if ready:
+                    char += os.read(fd, 2).decode('utf-8', errors='ignore')
                 
             return char
             

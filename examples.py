@@ -10,6 +10,7 @@ This file demonstrates how to:
 
 from character import Character
 from monster import Monster
+from items import COMMON_ITEMS
 from party import Party
 from dungeon_map import DungeonMap
 from game_state import GameState
@@ -51,7 +52,8 @@ def create_boss_monster():
         attack_bonus=8,
         damage="2d6+6",
         special_abilities=["Fire Breath", "Flight", "Frightful Presence"],
-        treasure=["500 gold", "Magic Sword +1", "Ring of Protection"]
+        gold=500,
+        treasure=[COMMON_ITEMS['magic_sword']]
     )
     return dragon
 

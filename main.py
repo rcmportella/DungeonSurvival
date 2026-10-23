@@ -50,8 +50,10 @@ def render_game(game_state):
             raw_print("Door Controls: L: lockpick | S: smash | Move away to cancel")
         else:
             raw_print("Controls: Arrow keys/WASD to move | D: descend stairs | U: ascend stairs | Q: quit | I: inventory | C: character")
+    elif display['mode'] == GameMode.INVENTORY:
+        raw_print("Backpack: choose with the listed keys | X: back/close")
     elif display['mode'] == GameMode.COMBAT:
-        raw_print("Combat: A: attack | S: spell | I: item | F: flee | Q: quit")
+        raw_print("Combat (current character acts): A: attack | S: spell | I: item | F: flee (whole party) | Q: quit")
     raw_print()
 
     # Party info
@@ -179,7 +181,7 @@ def handle_exploration_input(game_state, key):
         
     # Other commands
     if key.lower() == 'i':
-        game_state.add_message("Inventory not yet implemented")
+        game_state.open_inventory()
     elif key.lower() == 'c':
         # Display character sheets for all party members
         display_character_sheets(game_state)
@@ -212,72 +214,155 @@ def display_character_sheets(game_state):
         input_handler.get_key()
 
 
-def handle_combat_input(game_state, key):
-    """Handle input during combat mode"""
-    if not game_state.combat_instance:
-        game_state.mode = GameMode.EXPLORATION
-        return True
-        
-    combat = game_state.combat_instance
-    
-    if key.lower() == 'a':
-        # Attack
-        if combat.character.is_alive() and combat.monsters:
-            alive_monsters = [m for m in combat.monsters if m.is_alive()]
-            if alive_monsters:
-                result = combat.execute_round(
-                    player_action={'type': 'attack'},
-                    target_index=0
-                )
-                
-                # Debug: Write combat log to file
-                with open('combat_debug.log', 'a') as f:
-                    f.write("\n=== COMBAT LOG DEBUG ===\n")
-                    for log_entry in result.get('log', []):
-                        f.write(log_entry + "\n")
-                    f.write("========================\n\n")
-                
-                if result['status'] == 'victory':
-                    game_state.add_message(result['message'])
-                    # Award XP
-                    xp = 100 * len(combat.monsters)
-                    game_state.party.distribute_experience(xp)
-                    game_state.add_message(f"Gained {xp} experience!")
-                    
-                    # Track statistics
-                    game_state.stats['monsters_defeated'] += len(combat.monsters)
-                    game_state.stats['total_experience'] += xp
-                    
-                    # Remove dead monsters from map
-                    for monster in combat.monsters:
-                        for i, (m, mx, my) in enumerate(game_state.current_map.monsters):
-                            if m == monster:
-                                game_state.current_map.remove_monster(mx, my)
-                                
-                    game_state.mode = GameMode.EXPLORATION
-                    game_state.combat_instance = None
-                    
-                elif result['status'] == 'defeat':
-                    game_state.add_message(result['message'])
-                    game_state.mode = GameMode.GAME_OVER
-                    
-    elif key.lower() == 's':
-        game_state.add_message("Spell casting not yet fully implemented")
-        
-    elif key.lower() == 'i':
-        game_state.add_message("Item use not yet implemented")
-        
-    elif key.lower() == 'f':
-        # Flee
-        game_state.add_message("You flee from combat!")
+def _finish_combat(game_state, combat, result):
+    """Apply the outcome of a finished combat"""
+    status = result['status']
+    if status == 'victory':
+        # Stay in the combat screen so the final blow is visible;
+        # rewards are granted on the next key press
+        combat.menu = None
+    elif status == 'defeat':
+        game_state.add_message(result['message'])
+        game_state.mode = GameMode.GAME_OVER
+    elif status == 'fled':
+        game_state.add_message(result['message'])
         game_state.mode = GameMode.EXPLORATION
         game_state.combat_instance = None
-        # Move party back one tile
         game_state.party.position[0] -= 1
-        
-    elif key.lower() == 'q':
+
+
+def _collect_victory_rewards(game_state, combat):
+    """Award XP and treasure, remove the monsters and resume exploration"""
+    rewards = combat._collect_rewards()
+    xp = rewards['experience']
+    gold = rewards['gold']
+    game_state.add_message("Victory! All enemies defeated!")
+    game_state.party.distribute_experience(xp)
+    game_state.add_message(f"Gained {xp} experience!")
+    game_state.stats['monsters_defeated'] += len(combat.monsters)
+    game_state.stats['total_experience'] += xp
+    if gold:
+        game_state.party.distribute_gold(gold)
+        game_state.stats['total_gold_collected'] += gold
+        game_state.add_message(f"Found {gold} gold!")
+    if rewards['items']:
+        game_state.add_message("Found: " + ", ".join(str(item) for item in rewards['items']))
+        looter = game_state.party.get_alive_members()[0]
+        for item in rewards['items']:
+            looter.add_item(item)
+        game_state.add_message(f"{looter.name} carries the loot.")
+    for monster in combat.monsters:
+        for m, mx, my in list(game_state.current_map.monsters):
+            if m == monster:
+                game_state.current_map.remove_monster(mx, my)
+    game_state.mode = GameMode.EXPLORATION
+    game_state.combat_instance = None
+
+
+def _perform(game_state, combat, action, target=None):
+    combat.menu = None
+    result = combat.perform(action, target)
+    if result['status'] != 'ongoing':
+        _finish_combat(game_state, combat, result)
+
+
+def _is_support_spell(spell):
+    from spell import CureWounds, Shield, Bless, DetectMagic
+    return isinstance(spell, (CureWounds, Shield, Bless, DetectMagic))
+
+
+def _choose_target(combat, action):
+    """Open target selection, or act immediately if there is only one choice"""
+    actor = combat.current_actor()
+    if action['type'] == 'spell' and _is_support_spell(action['spell']):
+        choices = [m for m in combat.party_members if m.is_alive()]
+    else:
+        choices = combat.alive_monsters()
+    return actor, choices
+
+
+def handle_combat_input(game_state, key):
+    """Handle input during combat mode (one command per character turn)"""
+    combat = game_state.combat_instance
+    if not combat:
+        game_state.mode = GameMode.EXPLORATION
+        return True
+
+    if combat.status == 'victory':
+        _collect_victory_rewards(game_state, combat)
+        return True
+
+    actor = combat.current_actor()
+    if actor is None:
+        return True
+    key = key.lower()
+    menu = combat.menu
+
+    if key == 'q':
         return False
-        
+
+    # Sub-menus: cancel, spell/item/target selection
+    if menu:
+        if key in ('\x1b', 'x'):
+            combat.menu = None
+            return True
+        if not key.isdigit() or key == '0':
+            return True
+        index = int(key) - 1
+        if menu['stage'] == 'spell':
+            spells = menu['options']
+            if index < len(spells):
+                spell = spells[index]
+                if not actor.can_cast_spell(spell):
+                    game_state.add_message(f"{actor.name} cannot cast {spell.name} (no spell slots).")
+                    return True
+                action = {'type': 'spell', 'spell': spell}
+                _, choices = _choose_target(combat, action)
+                if len(choices) == 1:
+                    _perform(game_state, combat, action, choices[0])
+                else:
+                    combat.menu = {'stage': 'target', 'action': action, 'options': choices}
+        elif menu['stage'] == 'item':
+            items = menu['options']
+            if index < len(items):
+                _perform(game_state, combat, {'type': 'item', 'item_name': items[index]})
+        elif menu['stage'] == 'target':
+            choices = menu['options']
+            if index < len(choices):
+                _perform(game_state, combat, menu['action'], choices[index])
+        return True
+
+    if key == 'a':
+        enemies = combat.alive_monsters()
+        if len(enemies) == 1:
+            _perform(game_state, combat, {'type': 'attack'}, enemies[0])
+        else:
+            combat.menu = {'stage': 'target', 'action': {'type': 'attack'}, 'options': enemies}
+    elif key == 's':
+        if actor.known_spells:
+            combat.menu = {'stage': 'spell', 'options': list(actor.known_spells)}
+        else:
+            game_state.add_message(f"{actor.name} knows no spells.")
+    elif key == 'i':
+        names = []
+        for item in actor.inventory:
+            if getattr(item, 'consumable', False) and item.name not in names:
+                names.append(item.name)
+        if names:
+            combat.menu = {'stage': 'item', 'options': names}
+        else:
+            game_state.add_message(f"{actor.name} has no usable items.")
+    elif key == 'f':
+        _perform(game_state, combat, {'type': 'flee'})
+
+    return True
+
+
+def handle_inventory_input(game_state, key):
+    """Handle input in the inventory (backpack) screens"""
+    if key.lower() == 'q':
+        return False
+    game_state.inventory_input(key)
     return True
 
 
@@ -409,6 +494,8 @@ def main():
                         running = handle_exploration_input(game_state, key)
                     elif game_state.mode == GameMode.COMBAT:
                         running = handle_combat_input(game_state, key)
+                    elif game_state.mode == GameMode.INVENTORY:
+                        running = handle_inventory_input(game_state, key)
                         
     except KeyboardInterrupt:
         raw_print("\n\nGame interrupted by user.")
