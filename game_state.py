@@ -5,7 +5,7 @@ from enum import Enum
 from party import Party
 from dungeon_map import DungeonMap
 from combat import Combat
-from items import Ration, random_loot
+from items import Ration, random_loot, reset_uniques
 from monster import Monster, create_monster
 import random
 from colors import colorize
@@ -32,6 +32,7 @@ class GameState:
     """
     
     def __init__(self, use_predesigned=False, map_file=None):
+        reset_uniques()
         self.mode = GameMode.EXPLORATION
         self.party = Party()
         self.current_map = None

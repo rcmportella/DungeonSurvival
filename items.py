@@ -9,9 +9,27 @@ UNCOMMON = "Uncommon"
 RARE = "Rare"
 VERY_RARE = "Very Rare"
 LEGENDARY = "Legendary"
-RARITIES = (COMMON, UNCOMMON, RARE, VERY_RARE, LEGENDARY)  # ordered from most to least frequent
-RARITY_WEIGHTS = {COMMON: 100, UNCOMMON: 40, RARE: 15, VERY_RARE: 5, LEGENDARY: 2}
+UNIQUE = "Unique"  # only one copy of each unique item can exist per game
+RARITIES = (COMMON, UNCOMMON, RARE, VERY_RARE, LEGENDARY, UNIQUE)  # ordered from most to least frequent
+RARITY_WEIGHTS = {COMMON: 100, UNCOMMON: 40, RARE: 15, VERY_RARE: 5, LEGENDARY: 2, UNIQUE: 1}
 LEVELS_PER_RARITY_TIER = 3  # dungeon levels 1-3 give Common only, 4-6 up to Uncommon, ...
+
+_spawned_uniques = set()  # names of unique items already created in this game
+
+
+def reset_uniques():
+    """Forget which unique items exist (call when a new game starts)"""
+    _spawned_uniques.clear()
+
+
+def spawn(item):
+    """Return a copy of a catalog item, or None if it is unique and already exists"""
+    import copy
+    if item.rarity == UNIQUE:
+        if item.name in _spawned_uniques:
+            return None
+        _spawned_uniques.add(item.name)
+    return copy.copy(item)
 
 
 class Item:
@@ -239,14 +257,13 @@ def random_loot(dungeon_level):
     """Pick a random catalog item (a fresh copy) allowed at this dungeon level.
 
     Rarer items only appear deeper and are less likely than common ones."""
-    import copy
     import random
     tier = min((dungeon_level - 1) // LEVELS_PER_RARITY_TIER, len(RARITIES) - 1)
     allowed = RARITIES[:tier + 1]
     candidates = {}
     for item in COMMON_ITEMS.values():
-        if item.rarity in allowed:
+        if item.rarity in allowed and item.name not in _spawned_uniques:
             candidates[item.name] = item  # catalog has duplicate entries
     items = list(candidates.values())
     weights = [RARITY_WEIGHTS[i.rarity] for i in items]
-    return copy.copy(random.choices(items, weights=weights)[0])
+    return spawn(random.choices(items, weights=weights)[0])

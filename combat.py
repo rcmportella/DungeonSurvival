@@ -1,10 +1,9 @@
 """
 Combat system with D20 mechanics
 """
-import copy
 import random
 import dice
-from items import Item, HealingPotion, Weapon, Armor, Shield, Treasure, COMMON_ITEMS  # noqa: F401 (re-exported)
+from items import spawn, Item, HealingPotion, Weapon, Armor, Shield, Treasure, COMMON_ITEMS  # noqa: F401 (re-exported)
 
 
 class Combat:
@@ -217,7 +216,8 @@ class Combat:
         
         for monster in self.monsters:
             rewards['gold'] += monster.gold
-            rewards['items'].extend(copy.copy(item) for item in monster.treasure)
+            rewards['items'].extend(
+                loot for loot in (spawn(item) for item in monster.treasure) if loot)
                     
             rewards['experience'] += monster.xp
             
